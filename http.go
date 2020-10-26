@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 
 	"github.com/gorilla/mux"
 )
@@ -26,6 +27,12 @@ func indexPage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome...")
 }
 
+type byTitle []book
+
+func (m byTitle) Len() int           { return len(m) }
+func (m byTitle) Less(i, j int) bool { return m[i].Title < m[j].Title }
+func (m byTitle) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
+
 // --------------------------------------------------------
 // GET /books : return all books
 // --------------------------------------------------------
@@ -34,11 +41,18 @@ func getBooks(w http.ResponseWriter, r *http.Request) {
 	for _, value := range db {
 		s = append(s, value)
 	}
+	sort.Sort(byTitle(s))
+
 	var out []byte
 	out, err := json.Marshal(s)
 	if err != nil {
 		fmt.Println("error")
 	}
+
+	returnJSONResponse(w, out)
+}
+
+func returnJSONResponse(w http.ResponseWriter, out []byte) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, string(out))
@@ -48,24 +62,20 @@ func getBooks(w http.ResponseWriter, r *http.Request) {
 // GET /books/{id}
 // -----------------------------------------------------------------
 func getBook(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	mybook, ok := db[vars["id"]]
-	if !ok {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-	// converrt to json
-	var out []byte
-	out, err := json.Marshal(mybook)
-	if err != nil {
-		fmt.Println("error")
-	}
+    vars := mux.Vars(r)
+    mybook, ok := db[vars["id"]]
+    if !ok {
+	w.WriteHeader(http.StatusNotFound)
+	return
+     }
+     // converrt to json
+     var out []byte
+     out, err := json.Marshal(mybook)
+     if err != nil {
+	fmt.Println("error")
+     }
 
-	// return json response
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, string(out))
-
+     returnJSONResponse(w, out)
 }
 
 // -----------------------------------------------------
@@ -116,7 +126,6 @@ func addBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// return json response
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, string(out))
@@ -135,12 +144,10 @@ func verify(mybook *book) error {
 }
 
 // ----------------------------------------------------
-// PUT /books
-//
-// Update a book that is passed in through the request body.
+// PUT /books : upate a book
 // ---------------------------------------------------
 func updateBook(w http.ResponseWriter, r *http.Request) {
-	
+
 	var mybook book
 
 	// convert posted json to struct
